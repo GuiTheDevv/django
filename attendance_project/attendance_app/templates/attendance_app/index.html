@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Attendance App</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      h1 {
+        color: #333;
+      }
+      .btn {
+        display: inline-block;
+        padding: 10px 15px;
+        background-color: #4caf50;
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        margin-top: 20px;
+      }
+      .btn:hover {
+        background-color: #45a049;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Attendance Tracking App</h1>
+    <p>
+      Welcome to the attendance tracking application. This system allows you to
+      track attendance for various events and store the data locally in your
+      browser for up to 24 hours.
+    </p>
+
+    <a href="{% url 'attendance_app:event_list' %}" class="btn">View Events</a>
+  </body>
+</html>

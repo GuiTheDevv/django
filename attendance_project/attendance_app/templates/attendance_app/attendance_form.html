@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Attendance - {{ event.name }}</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      h1,
+      h2 {
+        color: #333;
+      }
+      .participant-list {
+        margin-top: 20px;
+      }
+      .participant-item {
+        padding: 10px;
+        border: 1px solid #ddd;
+        margin-bottom: 5px;
+        border-radius: 4px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .checkbox-container {
+        display: flex;
+        align-items: center;
+      }
+      .checkbox-container input {
+        margin-right: 10px;
+        transform: scale(1.5);
+      }
+      .btn {
+        display: inline-block;
+        padding: 10px 15px;
+        background-color: #4caf50;
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        margin-top: 20px;
+        cursor: pointer;
+        border: none;
+        font-size: 16px;
+      }
+      .btn:hover {
+        background-color: #45a049;
+      }
+      .nav-btn {
+        background-color: #2196f3;
+        margin-right: 10px;
+      }
+      .nav-btn:hover {
+        background-color: #0b7dda;
+      }
+      .status-message {
+        margin-top: 15px;
+        padding: 10px;
+        border-radius: 4px;
+      }
+      .success {
+        background-color: #dff0d8;
+        color: #3c763d;
+      }
+      .error {
+        background-color: #f2dede;
+        color: #a94442;
+      }
+      .offline-warning {
+        background-color: #fcf8e3;
+        color: #8a6d3b;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>{{ event.name }}</h1>
+    <h2>Date: {{ event.date }}</h2>
+
+    <div id="offline-warning" class="offline-warning">
+      You are currently offline. Attendance data will be saved locally and
+      synced when you're back online.
+    </div>
+
+    <div class="participant-list">
+      {% if participants %} {% for participant in participants %}
+      <div class="participant-item">
+        <span>{{ participant.name }}</span>
+        <div class="checkbox-container">
+          <input
+            type="checkbox"
+            id="participant-{{ participant.id }}"
+            data-id="{{ participant.id }}"
+          />
+          <label for="participant-{{ participant.id }}">Present</label>
+        </div>
+      </div>
+      {% endfor %} {% else %}
+      <p>No participants available.</p>
+      {% endif %}
+    </div>
+
+    <div id="status-message" class="status-message" style="display: none"></div>
+
+    <button id="save-btn" class="btn">Save Attendance</button>
+    <a href="{% url 'attendance_app:event_list' %}" class="btn nav-btn"
+      >Back to Events</a
+    >
+
+    <!-- Store Django variables in data attributes on a hidden element -->
+    <div
+      id="django-data"
+      data-event-id="{{ event.id }}"
+      data-attendance-data="{{ attendance_data_json|escapejs }}"
+      style="display: none"
+    ></div>
+
+    <script>
+      // Get data from hidden element
+      const djangoData = document.getElementById("django-data");
+      const eventId = parseInt(djangoData.dataset.eventId) || null;
+
+      // LocalStorage key format
+      const getStorageKey = (eventId) => `attendance_data_${eventId}`;
+      const getTimestampKey = (eventId) => `attendance_timestamp_${eventId}`;
+
+      // Initialize attendance data from existing records or localStorage
+      let attendanceData = {};
+
+      // Load initial data from Django
+      try {
+        const jsonString = djangoData.dataset.attendanceData;
+        if (jsonString && jsonString !== "") {
+          attendanceData = JSON.parse(jsonString);
+        }
+      } catch (e) {
+        console.error("Error parsing initial data:", e);
+      }
+
+      // Get saved data from localStorage if it exists and is less than 24 hours old
+      const savedData = localStorage.getItem(getStorageKey(eventId));
+      const savedTimestamp = localStorage.getItem(getTimestampKey(eventId));
+
+      if (savedData && savedTimestamp) {
+        const currentTime = new Date().getTime();
+        const savedTime = parseInt(savedTimestamp);
+
+        // Check if saved data is less than 24 hours old (86400000 ms)
+        if (currentTime - savedTime < 86400000) {
+          try {
+            attendanceData = JSON.parse(savedData);
+          } catch (e) {
+            console.error("Error parsing saved data:", e);
+          }
+        }
+      }
+
+      // Update checkboxes based on loaded data
+      function updateCheckboxes() {
+        for (const participantId in attendanceData) {
+          const checkbox = document.getElementById(
+            `participant-${participantId}`
+          );
+          if (checkbox) {
+            checkbox.checked = attendanceData[participantId];
+          }
+        }
+      }
+
+      // Initialize checkboxes
+      updateCheckboxes();
+
+      // Add event listeners to checkboxes
+      document
+        .querySelectorAll('input[type="checkbox"]')
+        .forEach((checkbox) => {
+          checkbox.addEventListener("change", function () {
+            const participantId = this.dataset.id;
+            attendanceData[participantId] = this.checked;
+
+            // Save to localStorage with current timestamp
+            localStorage.setItem(
+              getStorageKey(eventId),
+              JSON.stringify(attendanceData)
+            );
+            localStorage.setItem(
+              getTimestampKey(eventId),
+              new Date().getTime()
+            );
+          });
+        });
+
+      // Handle offline/online status
+      function updateOnlineStatus() {
+        const offlineWarning = document.getElementById("offline-warning");
+        if (navigator.onLine) {
+          offlineWarning.style.display = "none";
+        } else {
+          offlineWarning.style.display = "block";
+        }
+      }
+
+      window.addEventListener("online", updateOnlineStatus);
+      window.addEventListener("offline", updateOnlineStatus);
+
+      // Initial check
+      updateOnlineStatus();
+
+      // Save attendance data
+      document
+        .getElementById("save-btn")
+        .addEventListener("click", function () {
+          const statusMessage = document.getElementById("status-message");
+
+          // Function to save data to server
+          function saveToServer() {
+            fetch(`/events/${eventId}/save/`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(attendanceData),
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                if (data.status === "success") {
+                  statusMessage.textContent = "Attendance saved successfully!";
+                  statusMessage.className = "status-message success";
+                  statusMessage.style.display = "block";
+
+                  // Clear localStorage after successful save
+                  localStorage.removeItem(getStorageKey(eventId));
+                  localStorage.removeItem(getTimestampKey(eventId));
+                } else {
+                  throw new Error("Failed to save attendance");
+                }
+              })
+              .catch((error) => {
+                console.error("Error:", error);
+                statusMessage.textContent =
+                  "Error saving attendance. Data has been cached locally.";
+                statusMessage.className = "status-message error";
+                statusMessage.style.display = "block";
+
+                // Ensure data is saved locally
+                localStorage.setItem(
+                  getStorageKey(eventId),
+                  JSON.stringify(attendanceData)
+                );
+                localStorage.setItem(
+                  getTimestampKey(eventId),
+                  new Date().getTime()
+                );
+              });
+          }
+
+          // If online, save to server; otherwise, save locally
+          if (navigator.onLine) {
+            saveToServer();
+          } else {
+            localStorage.setItem(
+              getStorageKey(eventId),
+              JSON.stringify(attendanceData)
+            );
+            localStorage.setItem(
+              getTimestampKey(eventId),
+              new Date().getTime()
+            );
+
+            statusMessage.textContent =
+              "You are offline. Attendance data has been cached locally and will be synced when you reconnect.";
+            statusMessage.className = "status-message success";
+            statusMessage.style.display = "block";
+          }
+        });
+
+      // Try to sync data when coming back online
+      window.addEventListener("online", function () {
+        const savedData = localStorage.getItem(getStorageKey(eventId));
+        if (savedData) {
+          try {
+            attendanceData = JSON.parse(savedData);
+
+            // Attempt to sync with server
+            fetch(`/events/${eventId}/save/`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(attendanceData),
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                if (data.status === "success") {
+                  // Clear localStorage after successful sync
+                  localStorage.removeItem(getStorageKey(eventId));
+                  localStorage.removeItem(getTimestampKey(eventId));
+
+                  const statusMessage =
+                    document.getElementById("status-message");
+                  statusMessage.textContent =
+                    "Offline data synced successfully!";
+                  statusMessage.className = "status-message success";
+                  statusMessage.style.display = "block";
+                }
+              })
+              .catch((error) => {
+                console.error("Sync error:", error);
+              });
+          } catch (e) {
+            console.error("Error parsing saved data during sync:", e);
+          }
+        }
+      });
+    </script>
+  </body>
+</html>
