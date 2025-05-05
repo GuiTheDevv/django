@@ -4,7 +4,7 @@ pipeline {
     environment {
         EC2_USER = 'ubuntu'
         EC2_HOST = '18.217.181.167'
-        APP_DIR = '/home/ubuntu/my-django-app/attendance_project'
+        APP_DIR = '/home/ubuntu/my-django-app/attendance_project/attendance_project'
         SSH_KEY_ID = 'ec2-ssh-key'
         DJANGO_PORT = '8000'
     }
