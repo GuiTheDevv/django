@@ -1,13 +1,42 @@
 pipeline {
     agent any
 
+    environment {
+        EC2_USER = 'ubuntu'
+        EC2_HOST = '18.217.181.167'
+        APP_DIR = '/home/ubuntu/my-django-app'
+        SSH_KEY_ID = 'ec2-ssh-key'
+        DJANGO_PORT = '8000'
+    }
 
     stages {
-        stage('Checkout') {
+        stage('Upload Project to EC2') {
             steps {
-                checkout scm
+                sshagent([env.SSH_KEY_ID]) {
+                    sh """
+                    scp -o StrictHostKeyChecking=no -r . $EC2_USER@$EC2_HOST:$APP_DIR
+                    """
+                }
             }
         }
 
+        stage('Deploy Django App') {
+            steps {
+                sshagent([env.SSH_KEY_ID]) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+                    set -e
+                    cd $APP_DIR
+                    python3 -m venv venv
+                    source venv/bin/activate
+                    pip install -r requirements.txt  # Install dependencies
+                    python manage.py migrate
+                    python manage.py collectstatic --noinput
+                    sudo systemctl restart django
+                    EOF
+                    """
+                }
+            }
+        }
     }
 }
