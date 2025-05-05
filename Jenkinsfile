@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -15,8 +16,19 @@ pipeline {
                 sshagent([env.SSH_KEY_ID]) {
                     sh """
                     ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST '
-                        # Stop any running Django server
-                        pkill -f "python manage.py runserver" || true
+                        # Try to stop any running Django server (using sudo if available)
+                        if command -v sudo >/dev/null 2>&1; then
+                            sudo pkill -f "python manage.py runserver" || true
+                        else
+                            echo "Cannot kill existing process - might need manual intervention"
+                        fi
+                        
+                        # Backup the database if it exists
+                        if [ -f $APP_DIR/db.sqlite3 ]; then
+                            mkdir -p ~/backups
+                            cp $APP_DIR/db.sqlite3 ~/backups/db.sqlite3.backup.\$(date +%Y%m%d%H%M%S)
+                            echo "Database backed up"
+                        fi
                         
                         # Remove the existing directory and recreate it
                         rm -rf $APP_DIR
@@ -54,9 +66,10 @@ pipeline {
                         python manage.py migrate
                         python manage.py collectstatic --noinput
                         
-                        # Start Django server
+                        # Start Django server and save PID for future reference
                         nohup python manage.py runserver 0.0.0.0:$DJANGO_PORT > django.log 2>&1 &
-                        echo 'Django server started on port $DJANGO_PORT'
+                        echo \$! > django.pid
+                        echo 'Django server started on port $DJANGO_PORT with PID \$(cat django.pid)'
                     "
                     """
                 }
