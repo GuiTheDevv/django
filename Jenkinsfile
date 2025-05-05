@@ -4,9 +4,7 @@ pipeline {
     environment {
         EC2_USER = 'ubuntu'
         EC2_HOST = '18.217.181.167'
-        REMOTE_HOME = '/home/ubuntu'
-        PROJECT_NAME = 'my-django-app'
-        APP_DIR = "${REMOTE_HOME}/${PROJECT_NAME}"
+        APP_DIR = '/home/ubuntu/my-django-app'
         SSH_KEY_ID = 'ec2-ssh-key'
         DJANGO_PORT = '8000'
     }
@@ -26,7 +24,7 @@ pipeline {
             steps {
                 sshagent([env.SSH_KEY_ID]) {
                     sh """
-                    scp -o StrictHostKeyChecking=no -r ${PROJECT_NAME} $EC2_USER@$EC2_HOST:$REMOTE_HOME
+                    scp -o StrictHostKeyChecking=no -r . $EC2_USER@$EC2_HOST:$APP_DIR
                     """
                 }
             }
