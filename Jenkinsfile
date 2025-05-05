@@ -36,6 +36,8 @@ pipeline {
                     sh """
                     ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "
                         set -e
+                        sudo apt update
+                        sudo apt install -y python3.12-venv
                         cd $APP_DIR
                         python3 -m venv venv
                         source venv/bin/activate
