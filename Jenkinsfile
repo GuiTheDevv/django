@@ -4,7 +4,9 @@ pipeline {
     environment {
         EC2_USER = 'ubuntu'
         EC2_HOST = '18.217.181.167'
-        APP_DIR = '/home/ubuntu/my-django-app'
+        REMOTE_HOME = '/home/ubuntu'
+        PROJECT_NAME = 'my-django-app'
+        APP_DIR = "${REMOTE_HOME}/${PROJECT_NAME}"
         SSH_KEY_ID = 'ec2-ssh-key'
         DJANGO_PORT = '8000'
     }
@@ -24,7 +26,7 @@ pipeline {
             steps {
                 sshagent([env.SSH_KEY_ID]) {
                     sh """
-                    scp -o StrictHostKeyChecking=no -r * $EC2_USER@$EC2_HOST:$APP_DIR
+                    scp -o StrictHostKeyChecking=no -r ${PROJECT_NAME} $EC2_USER@$EC2_HOST:$REMOTE_HOME
                     """
                 }
             }
@@ -34,7 +36,7 @@ pipeline {
             steps {
                 sshagent([env.SSH_KEY_ID]) {
                     sh """
-                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "
+                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST '
                         set -e
                         sudo apt update
                         sudo apt install -y python3.12-venv
@@ -46,7 +48,7 @@ pipeline {
                         python manage.py migrate
                         python manage.py collectstatic --noinput
                         nohup python manage.py runserver 0.0.0.0:$DJANGO_PORT &
-                    "
+                    '
                     """
                 }
             }
