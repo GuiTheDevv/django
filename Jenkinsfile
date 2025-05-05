@@ -10,11 +10,18 @@ pipeline {
     }
 
     stages {
-        stage('Prepare EC2 Directory') {
+        stage('Clean EC2 Directory') {
             steps {
                 sshagent([env.SSH_KEY_ID]) {
                     sh """
-                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST 'mkdir -p $APP_DIR'
+                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST '
+                        # Stop any running Django server
+                        pkill -f "python manage.py runserver" || true
+                        
+                        # Remove the existing directory and recreate it
+                        rm -rf $APP_DIR
+                        mkdir -p $APP_DIR
+                    '
                     """
                 }
             }
@@ -24,7 +31,7 @@ pipeline {
             steps {
                 sshagent([env.SSH_KEY_ID]) {
                     sh """
-                    scp -o StrictHostKeyChecking=no -r * $EC2_USER@$EC2_HOST:$APP_DIR
+                    scp -o StrictHostKeyChecking=no -r * $EC2_USER@$EC2_HOST:$APP_DIR/
                     """
                 }
             }
@@ -37,16 +44,17 @@ pipeline {
                     ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "
                         set -e
                         cd $APP_DIR
+                        # Setup virtual environment
                         python3 -m venv venv
                         source venv/bin/activate
                         pip install --upgrade pip
                         pip install -r requirements.txt
-                        cd attendance_project
+                        
+                        # Run Django management commands
                         python manage.py migrate
                         python manage.py collectstatic --noinput
-                        # Kill any existing Django processes
-                        pkill -f 'python manage.py runserver' || true
-                        # Start the server with nohup
+                        
+                        # Start Django server
                         nohup python manage.py runserver 0.0.0.0:$DJANGO_PORT > django.log 2>&1 &
                         echo 'Django server started on port $DJANGO_PORT'
                     "
