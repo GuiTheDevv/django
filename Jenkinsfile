@@ -4,7 +4,7 @@ pipeline {
     environment {
         EC2_USER = 'ubuntu'
         EC2_HOST = '18.217.181.167'
-        APP_DIR = '/home/ubuntu/my-django-app/attendance_project/attendance_project'
+        APP_DIR = '/home/ubuntu/my-django-app'
         SSH_KEY_ID = 'ec2-ssh-key'
         DJANGO_PORT = '8000'
     }
@@ -41,9 +41,14 @@ pipeline {
                         source venv/bin/activate
                         pip install --upgrade pip
                         pip install -r requirements.txt
+                        cd attendance_project
                         python manage.py migrate
                         python manage.py collectstatic --noinput
-                        nohup python manage.py runserver 0.0.0.0:$DJANGO_PORT &
+                        # Kill any existing Django processes
+                        pkill -f 'python manage.py runserver' || true
+                        # Start the server with nohup
+                        nohup python manage.py runserver 0.0.0.0:$DJANGO_PORT > django.log 2>&1 &
+                        echo 'Django server started on port $DJANGO_PORT'
                     "
                     """
                 }
