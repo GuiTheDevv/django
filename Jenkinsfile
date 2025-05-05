@@ -10,11 +10,21 @@ pipeline {
     }
 
     stages {
+        stage('Prepare EC2 Directory') {
+            steps {
+                sshagent([env.SSH_KEY_ID]) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST 'mkdir -p $APP_DIR'
+                    """
+                }
+            }
+        }
+
         stage('Upload Project to EC2') {
             steps {
                 sshagent([env.SSH_KEY_ID]) {
                     sh """
-                    scp -o StrictHostKeyChecking=no -r . $EC2_USER@$EC2_HOST:$APP_DIR
+                    scp -o StrictHostKeyChecking=no -r * $EC2_USER@$EC2_HOST:$APP_DIR
                     """
                 }
             }
@@ -24,16 +34,17 @@ pipeline {
             steps {
                 sshagent([env.SSH_KEY_ID]) {
                     sh """
-                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
-                    set -e
-                    cd $APP_DIR
-                    python3 -m venv venv
-                    source venv/bin/activate
-                    pip install -r requirements.txt  # Install dependencies
-                    python manage.py migrate
-                    python manage.py collectstatic --noinput
-                    sudo systemctl restart django
-                    EOF
+                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "
+                        set -e
+                        cd $APP_DIR
+                        python3 -m venv venv
+                        source venv/bin/activate
+                        pip install --upgrade pip
+                        pip install -r requirements.txt
+                        python manage.py migrate
+                        python manage.py collectstatic --noinput
+                        nohup python manage.py runserver 0.0.0.0:$DJANGO_PORT &
+                    "
                     """
                 }
             }
