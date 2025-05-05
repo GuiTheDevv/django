@@ -13,23 +13,22 @@ pipeline {
         stage('Clean EC2 Directory') {
             steps {
                 sshagent([env.SSH_KEY_ID]) {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST '
-                        # Stop any running Django server
-                        pkill -f "python manage.py runserver" || true
+                    sh """ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+if command -v sudo >/dev/null 2>&1; then
+    sudo pkill -f "python manage.py runserver" || true
+else
+    pkill -f "python manage.py runserver" || true
+fi
 
-                        # Backup existing DB
-                        if [ -f $APP_DIR/db.sqlite3 ]; then
-                            mkdir -p ~/backups
-                            cp $APP_DIR/db.sqlite3 ~/backups/db.sqlite3.backup.\$(date +%Y%m%d%H%M%S)
-                            echo "Database backed up."
-                        fi
+if [ -f "$APP_DIR/db.sqlite3" ]; then
+    mkdir -p ~/backups
+    cp "$APP_DIR/db.sqlite3" ~/backups/db.sqlite3.backup.\$(date +%Y%m%d%H%M%S)
+    echo "Database backed up"
+fi
 
-                        # Remove and recreate app directory
-                        rm -rf $APP_DIR
-                        mkdir -p $APP_DIR
-                    '
-                    """
+rm -rf "$APP_DIR"
+mkdir -p "$APP_DIR"
+EOF"""
                 }
             }
         }
@@ -38,9 +37,8 @@ pipeline {
             steps {
                 sshagent([env.SSH_KEY_ID]) {
                     sh """
-                    # Copy only the contents of attendance_project into APP_DIR
-                    scp -o StrictHostKeyChecking=no -r attendance_project/* $EC2_USER@$EC2_HOST:$APP_DIR/
-                    """
+scp -o StrictHostKeyChecking=no -r * $EC2_USER@$EC2_HOST:$APP_DIR/
+"""
                 }
             }
         }
@@ -48,27 +46,23 @@ pipeline {
         stage('Deploy Django App') {
             steps {
                 sshagent([env.SSH_KEY_ID]) {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "
-                        set -e
-                        cd $APP_DIR
+                    sh """ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+set -e
+cd "$APP_DIR/attendance_project"
 
-                        # Setup and activate virtual environment
-                        python3 -m venv venv
-                        source venv/bin/activate
-                        pip install --upgrade pip
-                        pip install -r requirements.txt
+python3 -m venv venv
+. venv/bin/activate
 
-                        # Apply Django migrations and collect static files
-                        python manage.py migrate
-                        python manage.py collectstatic --noinput
+pip install --upgrade pip
+pip install -r requirements.txt
 
-                        # Start Django server in background
-                        nohup python manage.py runserver 0.0.0.0:$DJANGO_PORT > django.log 2>&1 &
-                        echo \$! > django.pid
-                        echo 'Django server started on port $DJANGO_PORT with PID \$(cat django.pid)'
-                    "
-                    """
+python manage.py migrate
+python manage.py collectstatic --noinput
+
+nohup python manage.py runserver 0.0.0.0:$DJANGO_PORT > django.log 2>&1 &
+echo \$! > django.pid
+echo "Django server started on port $DJANGO_PORT with PID \$(cat django.pid)"
+EOF"""
                 }
             }
         }
